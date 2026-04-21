@@ -68,7 +68,7 @@ static Box bounding_box(const std::vector< std::vector<unsigned char> > &bw){
         r1 = std::max(r1, i); c1 = std::max(c1, j);
     }
     if (r1 < r0) { r0=0; c0=0; r1=n-1; c1=m-1; }
-    return {r0,c0,r1,c1};
+    Box bb; bb.r0=r0; bb.c0=c0; bb.r1=r1; bb.c1=c1; return bb;
 }
 
 static int holes_count_and_centroid(const std::vector< std::vector<unsigned char> > &bw, const Box &b, double &hc_r, double &hc_c, int &holes_area){
@@ -83,7 +83,7 @@ static int holes_count_and_centroid(const std::vector< std::vector<unsigned char
         for(int j=0;j<w;j++){
             if (i==0||j==0||i==h-1||j==w-1){
                 if (!bw[b.r0+i][b.c0+j] && !vis[i][j]){
-                    vis[i][j] = 1; q.push({i,j});
+                    vis[i][j] = 1; q.push(std::make_pair(i,j));
                 }
             }
         }
