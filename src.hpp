@@ -8,7 +8,7 @@
 #include <cmath>
 #include <algorithm>
 
-typedef std::vector<std::vector<double>> IMAGE_T;
+typedef std::vector< std::vector<double> > IMAGE_T;
 
 namespace nr_internal {
 
@@ -17,7 +17,7 @@ struct Box { int r0, c0, r1, c1; }; // inclusive bounds
 static inline int clampi(int v, int lo, int hi){ return v<lo?lo:(v>hi?hi:v); }
 
 // Binarize with an adaptive threshold based on mean and std.
-static std::vector<std::vector<unsigned char>> binarize(const IMAGE_T &img){
+static std::vector< std::vector<unsigned char> > binarize(const IMAGE_T &img){
     int n = (int)img.size();
     int m = n? (int)img[0].size() : 0;
     double mean = 0.0, m2 = 0.0; int cnt = 0;
@@ -42,7 +42,7 @@ static std::vector<std::vector<unsigned char>> binarize(const IMAGE_T &img){
         // Ensure not too low if image is very dark
         thr = std::max(thr, 0.35);
     }
-    std::vector<std::vector<unsigned char>> bw(n, std::vector<unsigned char>(m, 0));
+    std::vector< std::vector<unsigned char> > bw(n, std::vector<unsigned char>(m, 0));
     for(int i=0;i<n;i++){
         for(int j=0;j<m;j++){
             bw[i][j] = (img[i][j] >= thr) ? 1 : 0;
@@ -51,11 +51,16 @@ static std::vector<std::vector<unsigned char>> binarize(const IMAGE_T &img){
     return bw;
 }
 
-static bool any_foreground(const std::vector<std::vector<unsigned char>> &bw){
-    for (auto &row: bw) for (auto v: row) if (v) return true; return false;
+static bool any_foreground(const std::vector< std::vector<unsigned char> > &bw){
+    for (size_t i=0;i<bw.size();++i){
+        for (size_t j=0;j<bw[i].size();++j){
+            if (bw[i][j]) return true;
+        }
+    }
+    return false;
 }
 
-static Box bounding_box(const std::vector<std::vector<unsigned char>> &bw){
+static Box bounding_box(const std::vector< std::vector<unsigned char> > &bw){
     int n = (int)bw.size(); int m = n? (int)bw[0].size() : 0;
     int r0=n, c0=m, r1=-1, c1=-1;
     for(int i=0;i<n;i++) for(int j=0;j<m;j++) if (bw[i][j]){
@@ -66,14 +71,13 @@ static Box bounding_box(const std::vector<std::vector<unsigned char>> &bw){
     return {r0,c0,r1,c1};
 }
 
-static int holes_count_and_centroid(const std::vector<std::vector<unsigned char>> &bw, const Box &b, double &hc_r, double &hc_c, int &holes_area){
+static int holes_count_and_centroid(const std::vector< std::vector<unsigned char> > &bw, const Box &b, double &hc_r, double &hc_c, int &holes_area){
     // Count holes in foreground: number of background (0) components fully enclosed by foreground within bbox.
     int n = (int)bw.size(); int m = n? (int)bw[0].size() : 0;
     int h = b.r1 - b.r0 + 1, w = b.c1 - b.c0 + 1;
     if (h <= 0 || w <= 0) { hc_r = hc_c = 0.0; holes_area = 0; return 0; }
-    std::vector<std::vector<unsigned char>> vis(h, std::vector<unsigned char>(w, 0));
-    auto inside = [&](int r, int c){ return r>=0 && r<h && c>=0 && c<w; };
-    std::queue<std::pair<int,int>> q;
+    std::vector< std::vector<unsigned char> > vis(h, std::vector<unsigned char>(w, 0));
+    std::queue< std::pair<int,int> > q;
     // Mark external background (0) reachable from bbox border in the cropped region
     for(int i=0;i<h;i++){
         for(int j=0;j<w;j++){
@@ -87,11 +91,12 @@ static int holes_count_and_centroid(const std::vector<std::vector<unsigned char>
     const int dr[4] = {-1,1,0,0};
     const int dc[4] = {0,0,-1,1};
     while(!q.empty()){
-        auto [r,c]=q.front(); q.pop();
+        std::pair<int,int> cur = q.front(); q.pop();
+        int r = cur.first, c = cur.second;
         for(int k=0;k<4;k++){
             int nr=r+dr[k], nc=c+dc[k];
-            if (inside(nr,nc) && !vis[nr][nc] && !bw[b.r0+nr][b.c0+nc]){
-                vis[nr][nc] = 1; q.push({nr,nc});
+            if (nr>=0 && nr<h && nc>=0 && nc<w && !vis[nr][nc] && !bw[b.r0+nr][b.c0+nc]){
+                vis[nr][nc] = 1; q.push(std::make_pair(nr,nc));
             }
         }
     }
@@ -100,16 +105,16 @@ static int holes_count_and_centroid(const std::vector<std::vector<unsigned char>
     for(int i=0;i<h;i++){
         for(int j=0;j<w;j++){
             if (!bw[b.r0+i][b.c0+j] && !vis[i][j]){
-                // flood fill this hole
                 holes++;
-                std::queue<std::pair<int,int>> qq; qq.push({i,j}); vis[i][j]=2;
+                std::queue< std::pair<int,int> > qq; qq.push(std::make_pair(i,j)); vis[i][j]=2;
                 while(!qq.empty()){
-                    auto [r,c]=qq.front(); qq.pop();
+                    std::pair<int,int> cur2 = qq.front(); qq.pop();
+                    int r = cur2.first, c = cur2.second;
                     sumr += r; sumc += c; area++;
                     for(int k=0;k<4;k++){
                         int nr=r+dr[k], nc=c+dc[k];
-                        if (inside(nr,nc) && !bw[b.r0+nr][b.c0+nc] && vis[nr][nc]==0){
-                            vis[nr][nc]=2; qq.push({nr,nc});
+                        if (nr>=0 && nr<h && nc>=0 && nc<w && !bw[b.r0+nr][b.c0+nc] && vis[nr][nc]==0){
+                            vis[nr][nc]=2; qq.push(std::make_pair(nr,nc));
                         }
                     }
                 }
@@ -122,7 +127,7 @@ static int holes_count_and_centroid(const std::vector<std::vector<unsigned char>
     return holes;
 }
 
-static void projections(const std::vector<std::vector<unsigned char>> &bw, const Box &b, std::vector<int> &row, std::vector<int> &col){
+static void projections(const std::vector< std::vector<unsigned char> > &bw, const Box &b, std::vector<int> &row, std::vector<int> &col){
     int h = b.r1-b.r0+1, w = b.c1-b.c0+1;
     row.assign(h,0); col.assign(w,0);
     for(int i=0;i<h;i++){
@@ -132,24 +137,26 @@ static void projections(const std::vector<std::vector<unsigned char>> &bw, const
     }
 }
 
-static void zoning(const std::vector<std::vector<unsigned char>> &bw, const Box &b, int gz, std::vector<double> &feat){
+static void zoning(const std::vector< std::vector<unsigned char> > &bw, const Box &b, int gz, std::vector<double> &feat){
     // Simple grid zoning densities (gz x gz)
     int h = b.r1-b.r0+1, w = b.c1-b.c0+1;
     feat.assign(gz*gz, 0.0);
     for(int i=0;i<h;i++){
         for(int j=0;j<w;j++){
             if (!bw[b.r0+i][b.c0+j]) continue;
-            int gi = (int)((long long)i * gz / std::max(1,h));
-            int gj = (int)((long long)j * gz / std::max(1,w));
+            int gi = (int)(i * gz / std::max(1,h));
+            int gj = (int)(j * gz / std::max(1,w));
             gi = clampi(gi, 0, gz-1); gj = clampi(gj, 0, gz-1);
             feat[gi*gz+gj] += 1.0;
         }
     }
-    double norm = 0.0; for(double v: feat) norm += v*v; norm = std::sqrt(std::max(1e-9, norm));
-    for(double &v: feat) v /= norm;
+    double norm = 0.0; 
+    for(size_t t=0;t<feat.size();++t) norm += feat[t]*feat[t]; 
+    norm = std::sqrt(std::max(1e-9, norm));
+    for(size_t t=0;t<feat.size();++t) feat[t] /= norm;
 }
 
-static int classify(const std::vector<std::vector<unsigned char>> &bw){
+static int classify(const std::vector< std::vector<unsigned char> > &bw){
     int n = (int)bw.size(); if (n==0) return 0; int m = (int)bw[0].size();
     if (!any_foreground(bw)) return 1; // degenerate, default to 1
     Box b = bounding_box(bw);
@@ -164,8 +171,8 @@ static int classify(const std::vector<std::vector<unsigned char>> &bw){
 
     // Projections
     std::vector<int> prow, pcol; projections(bw, b, prow, pcol);
-    int max_row = *std::max_element(prow.begin(), prow.end());
-    int max_col = *std::max_element(pcol.begin(), pcol.end());
+    int max_row = 0; for(size_t ii=0; ii<prow.size(); ++ii) if (prow[ii] > max_row) max_row = prow[ii];
+    int max_col = 0; for(size_t jj=0; jj<pcol.size(); ++jj) if (pcol[jj] > max_col) max_col = pcol[jj];
 
     // Holes
     double hc_r=0.0, hc_c=0.0; int holes_area=0;
@@ -178,7 +185,7 @@ static int classify(const std::vector<std::vector<unsigned char>> &bw){
         double hole_x = hc_c / std::max(1, w);
         double hole_frac = holes_area / (double)std::max(1, h*w);
         // 0 tends to be rounder, hole near center, and comparatively large
-        if (ratio > 0.75 && ratio < 1.25 && hole_frac > 0.10 && std::abs(hole_x-0.5) < 0.18 && std::abs(hole_y-0.5) < 0.18){
+        if (ratio > 0.75 && ratio < 1.25 && hole_frac > 0.10 && std::fabs(hole_x-0.5) < 0.18 && std::fabs(hole_y-0.5) < 0.18){
             return 0;
         }
         // Distinguish 6 vs 9 by hole position: lower -> 6, upper -> 9
@@ -225,7 +232,6 @@ static int classify(const std::vector<std::vector<unsigned char>> &bw){
 
 int judge(IMAGE_T &img){
     using namespace nr_internal;
-    auto bw = binarize(img);
+    std::vector< std::vector<unsigned char> > bw = binarize(img);
     return classify(bw);
 }
-
